@@ -21,9 +21,9 @@
       "change": "Initial release"
     },
     "webscan": {
-      "version": "1.4",
+      "version": "1.5",
       "description": "Scans a target for hidden pages and endpoints",
-      "change": "Remove broken progress loop, xargs -P 100, sync"
+      "change": "Fix stray double quote breaking shell quoting, show all results including 404s, bigger wordlist"
     }
   }
 }
