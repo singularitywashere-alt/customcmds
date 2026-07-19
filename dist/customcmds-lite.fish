@@ -45,7 +45,7 @@ function __cc_fetch_index
     if test $status -eq 0 -a -n "$resp"
         echo "$resp" | python3 -c "import sys,json; json.load(sys.stdin)['commands']" 2>/dev/null
         and echo "$resp"
-        and echo "$resp" > "$__CC_CONFIG_DIR/index.json"
+        and printf '%s\n' $resp > "$__CC_CONFIG_DIR/index.json"
     end
 end
 
