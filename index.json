@@ -1,1 +1,1 @@
-{   "commands": {     "attack": {       "version": "1.1",       "description": "Attack a specific HTTP domain",       "change": "Alot stronger and faster"     }   } }
+{   "commands": {     "attack": {       "version": "1.2",       "description": "Attacks a specific HTTP domain",       "change": "Alot stronger and faster"     }   } }
