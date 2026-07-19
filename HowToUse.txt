@@ -1,0 +1,2 @@
+curl -o ~/.config/fish/functions/customcmds.fish \
+  https://raw.githubusercontent.com/singularitywashere-alt/customcmds/main/dist/customcmds-lite.fish
