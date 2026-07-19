@@ -81,7 +81,6 @@ function webscan
     echo ""
 
     set pathfile (mktemp /tmp/webscan_paths.XXXXXX)
-    set resfile (mktemp /tmp/webscan_results.XXXXXX)
     set count 0
     for p in $paths
         set count (math $count + 1)
@@ -92,25 +91,18 @@ function webscan
     end
     set total $count
 
-    # Parallel scan with xargs, write results to temp file
-    cat $pathfile \
-    | xargs -P 50 -I {} sh -c "
-      url='$base/{}'
-      data=\$(curl -sS --max-time 10 --location -w '%{http_code}|%{size_download}|%{url_effective}' -o /dev/null \"\$url\" 2>/dev/null)
-      echo \"{}|\$data\"
-    " 2>/dev/null > $resfile &
+    echo (set_color brblack)"    Scanning $total paths... "(set_color normal)
+    set resfile (mktemp /tmp/webscan_results.XXXXXX)
 
-    # Show progress while scanning
-    set done 0
-    while test $done -lt $total
-        set lines (wc -l < $resfile 2>/dev/null)
-        if test -z "$lines"; set lines 0; end
-        printf "\r  [%d/%d] Scanning..." $lines $total >&2
-        sleep 0.1
-        set done $lines
-    end
-    wait
-    echo ""
+    # Parallel scan — synchronous, waits for all to finish
+    cat $pathfile \
+    | xargs -P 100 -I {} sh -c "
+      curl -sS --connect-timeout 5 --max-time 8 \
+        --location -w '%{http_code}|%{size_download}|%{url_effective}' \
+        -o /dev/null \
+        '$base/{}' 2>/dev/null \
+      | sed 's/^/{}|/'
+    " > $resfile
 
     # Read and display results
     set found 0
