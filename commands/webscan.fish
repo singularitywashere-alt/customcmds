@@ -118,53 +118,54 @@ function webscan
             set is_home 1
         end
 
-        set status ""
+        if test -z "$code"; set code "0"; end
+        set label ""
         set color ""
 
         switch (math "$code / 100")
             case 2
                 if test "$is_home" = 1
-                    set status "HOME"
+                    set label "HOME"
                     set color (set_color red)
                 else
-                    set status "VISIBLE"
+                    set label "VISIBLE"
                     set color (set_color green)
                 end
             case 3
                 if test "$is_home" = 1
-                    set status "HOME"
+                    set label "HOME"
                     set color (set_color red)
                 else
-                    set status "REDIRECT"
+                    set label "REDIRECT"
                     set color (set_color cyan)
                 end
             case 4
                 switch $code
                     case 403
-                        set status "PROTECTED"
+                        set label "PROTECTED"
                         set color (set_color yellow)
                     case 401
-                        set status "AUTH"
+                        set label "AUTH"
                         set color (set_color yellow)
                     case 429
-                        set status "RATE LIMITED"
+                        set label "RATE LIMITED"
                         set color (set_color yellow)
                     case '*'
-                        set status "MISSING"
+                        set label "MISSING"
                         set color (set_color red)
                 end
             case 5
-                set status "ERROR"
+                set label "ERROR"
                 set color (set_color red)
             case '*'
-                set status "?"
+                set label "?"
                 set color (set_color red)
         end
 
-        if test "$status" != "MISSING" -a "$status" != "HOME"
-            set found $found 1
+        if test "$label" != "MISSING" -a "$label" != "HOME"
+            set found (math $found + 1)
             printf "  %s %-14s %s (%s, %s B)%s\n" \
-                $color $status (set_color normal) \
+                $color $label (set_color normal) \
                 (set_color brblack)"$page"(set_color normal) \
                 (set_color brblack)(string trim -- $size)(set_color normal) \
                 (set_color normal)
@@ -177,7 +178,7 @@ function webscan
     echo ""
     echo ""
     echo (set_color cyan)"==> Scan complete."(set_color normal)
-    if set -q found
+    if not set -q found; set found 0; end
         set p; if test $found -ne 1; set p "s"; end
         echo (set_color green)"  Found $found accessible page$p."(set_color normal)
     else
