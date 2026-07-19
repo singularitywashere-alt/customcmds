@@ -21,9 +21,9 @@
       "change": "Initial release"
     },
     "webscan": {
-      "version": "1.0",
+      "version": "1.1",
       "description": "Scans a target for hidden pages and endpoints",
-      "change": "First release"
+      "change": "Parallel scanning, wordlist support, redirect filtering"
     }
   }
 }
