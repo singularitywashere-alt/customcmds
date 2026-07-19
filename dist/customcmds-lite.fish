@@ -324,7 +324,7 @@ function __cc_import
             echo (set_color red)"failed"(set_color normal) >&2
             continue
         end
-        echo "$content" > "$__CC_FUNCS/$c.fish"
+        printf '%s\n' $content > "$__CC_FUNCS/$c.fish"
         set -l v (echo "$idx" | __cc_idx_get $c version)
         set -l ch (echo "$idx" | __cc_idx_get $c change)
         __cc_man_add $c "$v" "$ch"
@@ -385,7 +385,7 @@ function __cc_update
             echo (set_color red)"failed"(set_color normal) >&2
             continue
         end
-        echo "$content" > "$__CC_FUNCS/$c.fish"
+        printf '%s\n' $content > "$__CC_FUNCS/$c.fish"
         set -l nv (echo "$idx" | __cc_idx_get $c version)
         set -l nc (echo "$idx" | __cc_idx_get $c change)
         __cc_man_add $c $nv $nc
@@ -477,7 +477,7 @@ function __cc_self_update
         return 1
     end
     echo (set_color green)"done"(set_color normal)
-    echo "$resp" > "$__CC_FUNCS/customcmds.fish"
+    printf '%s\n' $resp > "$__CC_FUNCS/customcmds.fish"
     echo (set_color green)"Updated customcmds to the latest version."(set_color normal)
     echo (set_color brblack)"  Restart your shell or run 'source ~/.config/fish/functions/customcmds.fish'"(set_color normal)
 end
