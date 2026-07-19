@@ -39,6 +39,11 @@
       "version": "1.0",
       "description": "Resolve Discord user and send IP logger DM",
       "change": "Initial release"
+    },
+    "iplog": {
+      "version": "1.0",
+      "description": "Self-hosted IP tracker \u2014 clean landing page, per-person links, admin dashboard",
+      "change": "Initial release"
     }
   }
 }
