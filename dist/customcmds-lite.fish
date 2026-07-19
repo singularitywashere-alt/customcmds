@@ -1,10 +1,11 @@
 # --- Paths ---
 set -g __CC_CONFIG_DIR "$HOME/.config/customcmds"
-set -g __CC_REPO_FILE "$__CC_CONFIG_DIR/repo"
 set -g __CC_MANIFEST "$__CC_CONFIG_DIR/manifest"
 set -g __CC_FUNCS "$HOME/.config/fish/functions"
 
 # --- Utilities ---
+
+set -g __CC_REPO_SLUG "singularitywashere-alt/customcmds"
 
 function __cc_init
     if not test -d "$__CC_CONFIG_DIR"
@@ -20,23 +21,8 @@ function __cc_init
     end
 end
 
-function __cc_repo
-    __cc_init; or return 1
-    if not test -f "$__CC_REPO_FILE"
-        echo (set_color yellow)"Repo not configured."(set_color normal)" Enter GitHub repo (USER/REPO): " >&2
-        read -l r
-        if test -z "$r"
-            echo (set_color yellow)"Aborted."(set_color normal) >&2
-            return 1
-        end
-        echo "$r" > "$__CC_REPO_FILE"
-    end
-    cat "$__CC_REPO_FILE"
-end
-
 function __cc_repo_slug
-    set -l url (__cc_repo) || return 1
-    string replace -ra '.*github\.com[/:]' '' -- $url | string replace -r '\.git$' '' | string trim -c '/'; true
+    echo "$__CC_REPO_SLUG"
 end
 
 function __cc_raw_base
@@ -512,7 +498,7 @@ end
 # --- Main ---
 
 function customcmds -d "Manage custom fish functions"
-    argparse -n customcmds 'h/help' 'rm' 'rs' 'cr' 'o' 't=' 'n=' 'd=' 'import' 'status' 'update' 'updinf' 'repo=' 'list-remote' 'refresh' 'self-update' -- $argv
+    argparse -n customcmds 'h/help' 'rm' 'rs' 'cr' 'o' 't=' 'n=' 'd=' 'import' 'status' 'update' 'updinf' 'list-remote' 'refresh' 'self-update' -- $argv
     or return
 
     if set -q _flag_refresh
@@ -536,7 +522,6 @@ function customcmds -d "Manage custom fish functions"
         echo "  --list-remote               List available commands from the repo"
         echo "  --refresh                   Force re-fetch remote index"
         echo "  --self-update               Update customcmds itself from the repo"
-        echo "  --repo <USER/REPO>          Set the GitHub repo"
         echo ""
         echo "Examples:"
         echo "  customcmds                              List all commands"
@@ -546,14 +531,6 @@ function customcmds -d "Manage custom fish functions"
         echo "  customcmds --update                     Update all outdated"
         echo "  customcmds --list-remote                List available commands"
         echo "  customcmds --self-update                Update customcmds itself"
-        echo "  customcmds --repo user/repo             Set repo"
-        return
-    end
-
-    if set -q _flag_repo
-        mkdir -p "$__CC_CONFIG_DIR"
-        echo "$_flag_repo" > "$__CC_REPO_FILE"
-        echo (set_color green)"Repo set to $_flag_repo"(set_color normal)
         return
     end
 
