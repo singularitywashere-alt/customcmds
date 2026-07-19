@@ -21,9 +21,9 @@
       "change": "Initial release"
     },
     "webscan": {
-      "version": "1.3",
+      "version": "1.4",
       "description": "Scans a target for hidden pages and endpoints",
-      "change": "Fix shell $data quoting, xargs -P 50, subshell fix"
+      "change": "Remove broken progress loop, xargs -P 100, sync"
     }
   }
 }
