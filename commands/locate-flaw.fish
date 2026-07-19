@@ -1,1 +1,260 @@
-function locate-flaw --description "Discover exposed APIs. Use -A to attack with your attack command."     # -----------------------------------------------------------------     # CONFIGURATION     # -----------------------------------------------------------------     set -g MAX_CRAWL_DEPTH 15      # -----------------------------------------------------------------     # URL ENCODING / DECODING     # -----------------------------------------------------------------     function __urlencode         python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=''))" "$argv[1]"     end     function __urldecode         python3 -c "import sys, urllib.parse; print(urllib.parse.unquote(sys.argv[1]))" "$argv[1]"     end      # -----------------------------------------------------------------     # LINK EXTRACTION & DOMAIN CHECK     # -----------------------------------------------------------------     function __extract_links         grep -oPi '<a\s+(?:[^>]*?\s+)?href\s*=\s*["\']?\K[^"\' >]+' | \         sed 's/#.*//; s/\s*$//'     end     function __is_internal -a url base_domain         set -l host (echo "$url" | sed -E 's#^https?://##; s#/.*##; s#^www\.##')         if test -z "$host"             return 0         end         string match -qr "\.?$base_domain\$" "$host"     end     function __make_absolute -a base href         if string match -qr '^https?://' "$href"             echo "$href"         else if string match -q '/*' "$href"             echo "$base$href"         else             echo "$base/$href"         end     end      # -----------------------------------------------------------------     # ENHANCED API DISCOVERY (scans FULL page source + JS)     # -----------------------------------------------------------------     function __extract_js_links -a html base_url base_domain         # 1. External JS files         set -l js_srcs (echo "$html" | grep -oPi '<script\s[^>]*src\s*=\s*["\']?\K[^"\' >]+')         for src in $js_srcs             set -l full_js (__make_absolute "$base_url" "$src")             if __is_internal "$full_js" "$base_domain"                 set -l js_content (curl -sS --max-time 10 "$full_js" 2>/dev/null)                 if test -n "$js_content"                     echo "$js_content" | grep -oP '["'\''`](https?://[^"'\''`]+|/(?:api|graphql|v\d+|query|rest|endpoint|data|search)[^"'\''`]*)["'\''`]' | \                     sed 's/^["'\''`]//; s/["'\''`]$//'                 end             end         end         # 2. Inline scripts         echo "$html" | grep -oPi '<script\b[^>]*>(.*?)</script>' | \         sed 's/<[^>]*>//g' | \         grep -oP '["'\''`](https?://[^"'\''`]+|/(?:api|graphql|v\d+|query|rest|endpoint|data|search)[^"'\''`]*)["'\''`]' | \         sed 's/^["'\''`]//; s/["'\''`]$//'         # 3. fetch/axios/xhr patterns         echo "$html" | grep -oP '(?:fetch|axios\.(?:get|post|put|delete)|xhr\.open)\s*\(\s*["'\''`]([^"'\''`]+)["'\''`]' | \         grep -oP '["'\''`]\K[^"'\''`]+' | \         grep -E '/(api|graphql|v[0-9]+|query|rest|endpoint|data|search)' 2>/dev/null         # 4. href/src/action/data-url attributes         echo "$html" | grep -oP '(?:href|src|action|data-url)\s*=\s*["'\''`]\K[^"'\''`]+' | \         grep -E '/(api|graphql|v[0-9]+|query|rest|endpoint|data|search)' 2>/dev/null     end      # -----------------------------------------------------------------     # RECURSIVE CRAWLER     # -----------------------------------------------------------------     function __crawl_site -a start_url base_url base_domain         set -l visited         set -l queue $start_url         set -l depth 0          while test -n "$queue" -a $depth -lt $MAX_CRAWL_DEPTH             set -l next_queue             for url in $queue                 if contains -- "$url" $visited                     continue                 end                 set -a visited "$url"                 set -l html (curl -sS -L --max-time 10 "$url" 2>/dev/null)                 if test -z "$html"                     continue                 end                 set -l links (echo "$html" | __extract_links)                 set -l js_links (__extract_js_links "$html" "$base_url" "$base_domain")                 set -l all_raw $links $js_links                 for raw in $all_raw                     set -l full (__make_absolute "$base_url" "$raw")                     if __is_internal "$full" "$base_domain"                         if not contains -- "$full" $visited                             set -a next_queue "$full"                         end                     end                 end             end             # push API-looking URLs to front             set -l api_front             set -l rest             for u in $next_queue                 if string match -qr '(api|graphql|query|rest|endpoint|v\d+/|search)' "$u"                     set -a api_front "$u"                 else                     set -a rest "$u"                 end             end             set queue $api_front $rest             set depth (math $depth + 1)         end         printf "%s\n" $visited | sort -u     end      # -----------------------------------------------------------------     # EXPOSED ENDPOINT LIST (collected during discovery)     # -----------------------------------------------------------------     set -g EXPOSED_LIST      # -----------------------------------------------------------------     # DISCOVERY PHASE – check if URL looks like API and report status     # -----------------------------------------------------------------     function __discover_and_report -a url         if string match -qr '(api|graphql|query|rest|endpoint|v\d+/|search)' "$url"             set -l code (curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null)             set -l status_text "accessible ($code)"             if test "$code" = "200"                 set status_text "publicly accessible (200)"             else if test "$code" = "401" -o "$code" = "403"                 set status_text "protected ($code)"             end             echo "   [EXPOSED] $url  -> $status_text"             set -a EXPOSED_LIST "$url"         end     end      # -----------------------------------------------------------------     # MAIN     # -----------------------------------------------------------------     set -l start_time (date +%s)      # ----------------------------------- NEW: --list MODE -----------------------------------     if test (count $argv) -ge 1; and test "$argv[1]" = "--list"         set -e argv[1]                       # remove --list         if test (count $argv) -ne 1             echo "Usage: locate-flaw --list <target-website>"             return 1         end         set target $argv[1]         if not string match -qr '^https?://' "$target"             set target "https://$target"         end         set base_url (echo "$target" | sed -E 's#(^https?://[^/]+).*#\1#')         set base_domain (echo "$base_url" | sed -E 's#^https?://##; s#^www\.##')         set path (string replace -r '^https?://[^/]+' '' "$target")          if test -n "$path" -a "$path" != "/"             # direct endpoint → just print it if it looks like API             __discover_and_report "$target" >/dev/null  # collects into EXPOSED_LIST         else             __crawl_site "$target" "$base_url" "$base_domain" | while read url                 __discover_and_report "$url" >/dev/null             end         end          # output ONLY the endpoints, one per line         for ep in $EXPOSED_LIST             echo "$ep"         end         return 0     end     # ----------------------------------------------------------------------------------------      set -l attack_mode 0     if test (count $argv) -eq 0         echo "Usage: locate-flaw [-A] <target-website>"         return 1     end     if test "$argv[1]" = "-A"         set attack_mode 1         set -e argv[1]         if test (count $argv) -ne 1             echo "Usage: locate-flaw -A <target-website>"             return 1         end     end     set target $argv[1]     if not string match -qr '^https?://' "$target"         set target "https://$target"     end      set base_url (echo "$target" | sed -E 's#(^https?://[^/]+).*#\1#')     set base_domain (echo "$base_url" | sed -E 's#^https?://##; s#^www\.##')     set path (string replace -r '^https?://[^/]+' '' "$target")      # Direct endpoint mode     if test -n "$path" -a "$path" != "/"         echo "Locating flaws in $target just chill out and relax (this will scan for minor flaws, if this finds no flaws its still optimal to look for yourself)"         __discover_and_report "$target"          set -l elapsed (math (date +%s) - $start_time)         set -l flaw_count (count $EXPOSED_LIST)         command -v notify-send >/dev/null 2>&1 && notify-send "$flaw_count API FLAWS FOUND" "Operation took: $elapsed seconds"          if test $attack_mode -eq 1             if test $flaw_count -gt 0                 attack "$EXPOSED_LIST[1]"             end         end         return     end      # Crawl domain     echo "Locating flaws in $target just chill out and relax (this will scan for minor flaws, if this finds no flaws its still optimal to look for yourself)"     set all_urls (__crawl_site "$target" "$base_url" "$base_domain")     if test (count $all_urls) -eq 0         echo "No internal URLs found."         set -l elapsed (math (date +%s) - $start_time)         command -v notify-send >/dev/null 2>&1 && notify-send "0 API FLAWS FOUND" "Operation took: $elapsed seconds"         return 0     end     echo "Found $(count $all_urls) internal URLs. Checking for exposed APIs …"     for url in $all_urls         __discover_and_report "$url"     end      set -l flaw_count (count $EXPOSED_LIST)     set -l elapsed (math (date +%s) - $start_time)     command -v notify-send >/dev/null 2>&1 && notify-send "$flaw_count API FLAWS FOUND" "Operation took: $elapsed seconds"      if test $flaw_count -eq 0         echo "No exposed API endpoints found."         return 0     end      # If not attack mode, we're done     if test $attack_mode -eq 0         echo ""         echo "Discovery complete. Use -A to attack one of these endpoints."         return 0     end      # Attack mode – selection menu     echo ""     echo "Select an endpoint to attack:"     set -l idx 1     for ep in $EXPOSED_LIST         echo "  [$idx] $ep"         set idx (math $idx + 1)     end     echo "  [random] Pick a random endpoint"     echo "  [skip] Do not attack"      while true         echo -n "> "         read -l choice         if test "$choice" = "skip"             echo "Attack skipped."             return 0         else if test "$choice" = "random"             set -l total (count $EXPOSED_LIST)             set -l rnd (random 1 $total)             set chosen $EXPOSED_LIST[$rnd]             break         else if string match -qr '^\d+$' "$choice"             if test $choice -ge 1 -a $choice -le (count $EXPOSED_LIST)                 set chosen $EXPOSED_LIST[$choice]                 break             else                 echo "Invalid number. Try again."             end         else             echo "Unknown option. Type a number, 'random', or 'skip'."         end     end      echo ""     attack "$chosen" end
+function locate-flaw --description "Discover exposed APIs. Use -A to attack with your attack command."
+    # -----------------------------------------------------------------
+    # CONFIGURATION
+    # -----------------------------------------------------------------
+    set -g MAX_CRAWL_DEPTH 15
+    # -----------------------------------------------------------------
+    # URL ENCODING / DECODING
+    # -----------------------------------------------------------------
+    function __urlencode
+        python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=''))" "$argv[1]"
+    end
+    function __urldecode
+        python3 -c "import sys, urllib.parse; print(urllib.parse.unquote(sys.argv[1]))" "$argv[1]"
+    end
+    # -----------------------------------------------------------------
+    # LINK EXTRACTION & DOMAIN CHECK
+    # -----------------------------------------------------------------
+    function __extract_links
+        grep -oPi '<a\s+(?:[^>]*?\s+)?href\s*=\s*["\']?\K[^"\' >]+' | \
+        sed 's/#.*//; s/\s*$//'
+    end
+    function __is_internal -a url base_domain
+        set -l host (echo "$url" | sed -E 's#^https?://##; s#/.*##; s#^www\.##')
+        if test -z "$host"
+            return 0
+        end
+        string match -qr "\.?$base_domain\$" "$host"
+    end
+    function __make_absolute -a base href
+        if string match -qr '^https?://' "$href"
+            echo "$href"
+        else if string match -q '/*' "$href"
+            echo "$base$href"
+        else
+            echo "$base/$href"
+        end
+    end
+    # -----------------------------------------------------------------
+    # ENHANCED API DISCOVERY (scans FULL page source + JS)
+    # -----------------------------------------------------------------
+    function __extract_js_links -a html base_url base_domain
+        # 1. External JS files
+        set -l js_srcs (echo "$html" | grep -oPi '<script\s[^>]*src\s*=\s*["\']?\K[^"\' >]+')
+        for src in $js_srcs
+            set -l full_js (__make_absolute "$base_url" "$src")
+            if __is_internal "$full_js" "$base_domain"
+                set -l js_content (curl -sS --max-time 10 "$full_js" 2>/dev/null)
+                if test -n "$js_content"
+                    echo "$js_content" | grep -oP '["'\''`](https?://[^"'\''`]+|/(?:api|graphql|v\d+|query|rest|endpoint|data|search)[^"'\''`]*)["'\''`]' | \
+                    sed 's/^["'\''`]//; s/["'\''`]$//'
+                end
+            end
+        end
+        # 2. Inline scripts
+        echo "$html" | grep -oPi '<script\b[^>]*>(.*?)</script>' | \
+        sed 's/<[^>]*>//g' | \
+        grep -oP '["'\''`](https?://[^"'\''`]+|/(?:api|graphql|v\d+|query|rest|endpoint|data|search)[^"'\''`]*)["'\''`]' | \
+        sed 's/^["'\''`]//; s/["'\''`]$//'
+        # 3. fetch/axios/xhr patterns
+        echo "$html" | grep -oP '(?:fetch|axios\.(?:get|post|put|delete)|xhr\.open)\s*\(\s*["'\''`]([^"'\''`]+)["'\''`]' | \
+        grep -oP '["'\''`]\K[^"'\''`]+' | \
+        grep -E '/(api|graphql|v[0-9]+|query|rest|endpoint|data|search)' 2>/dev/null
+        # 4. href/src/action/data-url attributes
+        echo "$html" | grep -oP '(?:href|src|action|data-url)\s*=\s*["'\''`]\K[^"'\''`]+' | \
+        grep -E '/(api|graphql|v[0-9]+|query|rest|endpoint|data|search)' 2>/dev/null
+    end
+    # -----------------------------------------------------------------
+    # RECURSIVE CRAWLER
+    # -----------------------------------------------------------------
+    function __crawl_site -a start_url base_url base_domain
+        set -l visited
+        set -l queue $start_url
+        set -l depth 0
+        while test -n "$queue" -a $depth -lt $MAX_CRAWL_DEPTH
+            set -l next_queue
+            for url in $queue
+                if contains -- "$url" $visited
+                    continue
+                end
+                set -a visited "$url"
+                set -l html (curl -sS -L --max-time 10 "$url" 2>/dev/null)
+                if test -z "$html"
+                    continue
+                end
+                set -l links (echo "$html" | __extract_links)
+                set -l js_links (__extract_js_links "$html" "$base_url" "$base_domain")
+                set -l all_raw $links $js_links
+                for raw in $all_raw
+                    set -l full (__make_absolute "$base_url" "$raw")
+                    if __is_internal "$full" "$base_domain"
+                        if not contains -- "$full" $visited
+                            set -a next_queue "$full"
+                        end
+                    end
+                end
+            end
+            # push API-looking URLs to front
+            set -l api_front
+            set -l rest
+            for u in $next_queue
+                if string match -qr '(api|graphql|query|rest|endpoint|v\d+/|search)' "$u"
+                    set -a api_front "$u"
+                else
+                    set -a rest "$u"
+                end
+            end
+            set queue $api_front $rest
+            set depth (math $depth + 1)
+        end
+        printf "%s\n" $visited | sort -u
+    end
+    # -----------------------------------------------------------------
+    # EXPOSED ENDPOINT LIST (collected during discovery)
+    # -----------------------------------------------------------------
+    set -g EXPOSED_LIST
+    # -----------------------------------------------------------------
+    # DISCOVERY PHASE – check if URL looks like API and report status
+    # -----------------------------------------------------------------
+    function __discover_and_report -a url
+        if string match -qr '(api|graphql|query|rest|endpoint|v\d+/|search)' "$url"
+            set -l code (curl -sS -o /dev/null -w "%{http_code}" --max-time 10 "$url" 2>/dev/null)
+            set -l status_text "accessible ($code)"
+            if test "$code" = "200"
+                set status_text "publicly accessible (200)"
+            else if test "$code" = "401" -o "$code" = "403"
+                set status_text "protected ($code)"
+            end
+            echo "   [EXPOSED] $url  -> $status_text"
+            set -a EXPOSED_LIST "$url"
+        end
+    end
+    # -----------------------------------------------------------------
+    # MAIN
+    # -----------------------------------------------------------------
+    set -l start_time (date +%s)
+    # ----------------------------------- NEW: --list MODE -----------------------------------
+    if test (count $argv) -ge 1; and test "$argv[1]" = "--list"
+        set -e argv[1]
+        # remove --list
+        if test (count $argv) -ne 1
+            echo "Usage: locate-flaw --list <target-website>"
+            return 1
+        end
+        set target $argv[1]
+        if not string match -qr '^https?://' "$target"
+            set target "https://$target"
+        end
+        set base_url (echo "$target" | sed -E 's#(^https?://[^/]+).*#\1#')
+        set base_domain (echo "$base_url" | sed -E 's#^https?://##; s#^www\.##')
+        set path (string replace -r '^https?://[^/]+' '' "$target")
+        if test -n "$path" -a "$path" != "/"
+            # direct endpoint → just print it if it looks like API
+            __discover_and_report "$target" >/dev/null  # collects into EXPOSED_LIST
+        else
+            __crawl_site "$target" "$base_url" "$base_domain" | while read url
+                __discover_and_report "$url" >/dev/null
+            end
+        end
+        # output ONLY the endpoints, one per line
+        for ep in $EXPOSED_LIST
+            echo "$ep"
+        end
+        return 0
+    end
+    # ----------------------------------------------------------------------------------------
+    set -l attack_mode 0
+    if test (count $argv) -eq 0
+        echo "Usage: locate-flaw [-A] <target-website>"
+        return 1
+    end
+    if test "$argv[1]" = "-A"
+        set attack_mode 1
+        set -e argv[1]
+        if test (count $argv) -ne 1
+            echo "Usage: locate-flaw -A <target-website>"
+            return 1
+        end
+    end
+    set target $argv[1]
+    if not string match -qr '^https?://' "$target"
+        set target "https://$target"
+    end
+    set base_url (echo "$target" | sed -E 's#(^https?://[^/]+).*#\1#')
+    set base_domain (echo "$base_url" | sed -E 's#^https?://##; s#^www\.##')
+    set path (string replace -r '^https?://[^/]+' '' "$target")
+    # Direct endpoint mode
+    if test -n "$path" -a "$path" != "/"
+        echo "Locating flaws in $target just chill out and relax (this will scan for minor flaws, if this finds no flaws its still optimal to look for yourself)"
+        __discover_and_report "$target"
+        set -l elapsed (math (date +%s) - $start_time)
+        set -l flaw_count (count $EXPOSED_LIST)
+        command -v notify-send >/dev/null 2>&1 && notify-send "$flaw_count API FLAWS FOUND" "Operation took: $elapsed seconds"
+        if test $attack_mode -eq 1
+            if test $flaw_count -gt 0
+                attack "$EXPOSED_LIST[1]"
+            end
+        end
+        return
+    end
+    # Crawl domain
+    echo "Locating flaws in $target just chill out and relax (this will scan for minor flaws, if this finds no flaws its still optimal to look for yourself)"
+    set all_urls (__crawl_site "$target" "$base_url" "$base_domain")
+    if test (count $all_urls) -eq 0
+        echo "No internal URLs found."
+        set -l elapsed (math (date +%s) - $start_time)
+        command -v notify-send >/dev/null 2>&1 && notify-send "0 API FLAWS FOUND" "Operation took: $elapsed seconds"
+        return 0
+    end
+    echo "Found $(count $all_urls) internal URLs. Checking for exposed APIs …"
+    for url in $all_urls
+        __discover_and_report "$url"
+    end
+    set -l flaw_count (count $EXPOSED_LIST)
+    set -l elapsed (math (date +%s) - $start_time)
+    command -v notify-send >/dev/null 2>&1 && notify-send "$flaw_count API FLAWS FOUND" "Operation took: $elapsed seconds"
+    if test $flaw_count -eq 0
+        echo "No exposed API endpoints found."
+        return 0
+    end
+    # If not attack mode, we're done
+    if test $attack_mode -eq 0
+        echo ""
+        echo "Discovery complete. Use -A to attack one of these endpoints."
+        return 0
+    end
+    # Attack mode – selection menu
+    echo ""
+    echo "Select an endpoint to attack:"
+    set -l idx 1
+    for ep in $EXPOSED_LIST
+        echo "  [$idx] $ep"
+        set idx (math $idx + 1)
+    end
+    echo "  [random] Pick a random endpoint"
+    echo "  [skip] Do not attack"
+    while true
+        echo -n "> "
+        read -l choice
+        if test "$choice" = "skip"
+            echo "Attack skipped."
+            return 0
+        else if test "$choice" = "random"
+            set -l total (count $EXPOSED_LIST)
+            set -l rnd (random 1 $total)
+            set chosen $EXPOSED_LIST[$rnd]
+            break
+        else if string match -qr '^\d+$' "$choice"
+            if test $choice -ge 1 -a $choice -le (count $EXPOSED_LIST)
+                set chosen $EXPOSED_LIST[$choice]
+                break
+            else
+                echo "Invalid number. Try again."
+            end
+        else
+            echo "Unknown option. Type a number, 'random', or 'skip'."
+        end
+    end
+    echo ""
+    attack "$chosen"
+end
