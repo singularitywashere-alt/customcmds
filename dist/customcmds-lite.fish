@@ -470,9 +470,8 @@ end
 # --- Self update ---
 
 function __cc_self_update
-    set -l b (__cc_raw_base) || return 1
     echo -n "  Fetching latest version... "
-    set -l resp (curl -sfL "$b/dist/customcmds-lite.fish")
+    set -l resp (curl -sfL "https://raw.githubusercontent.com/$__CC_REPO_SLUG/main/dist/customcmds-lite.fish")
     if test -z "$resp"
         echo (set_color red)"failed"(set_color normal) >&2
         return 1
