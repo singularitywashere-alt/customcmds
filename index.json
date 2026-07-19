@@ -1,19 +1,19 @@
 {
   "commands": {
     "attack": {
-      "version": "1.3",
+      "version": "1.4",
       "description": "Attacks a HTTP domain, VPN should be used",
-      "change": "Fixed multi-line formatting"
+      "change": "Fixed multi-line formatting (re-import to fix local copy)"
     },
     "locate-flaw": {
-      "version": "1.0",
+      "version": "1.1",
       "description": "Locates flaws in a websites, very useful pair with the Attack command",
-      "change": "First Release"
+      "change": "Fixed multi-line formatting (re-import to fix local copy)"
     },
     "hunt": {
-      "version": "1.0",
+      "version": "1.1",
       "description": "Does locate-flaw and Attack by itself, requires both commands to be installed from our repo",
-      "change": "First Release"
+      "change": "Fixed multi-line formatting (re-import to fix local copy)"
     }
   }
 }
