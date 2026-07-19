@@ -80,45 +80,57 @@ function webscan
 
     echo ""
 
-    set tmp (mktemp /tmp/webscan.XXXXXX)
+    set pathfile (mktemp /tmp/webscan_paths.XXXXXX)
+    set resfile (mktemp /tmp/webscan_results.XXXXXX)
     set count 0
     for p in $paths
         set count (math $count + 1)
         if test $count -gt $limit
             break
         end
-        echo "$p" >> $tmp
+        echo "$p" >> $pathfile
     end
     set total $count
-    set count 0
 
-    # Pipeline: xargs parallel curl → fish reads results live
-    cat $tmp \
-    | xargs -P 20 -I {} sh -c "
+    # Parallel scan with xargs, write results to temp file
+    cat $pathfile \
+    | xargs -P 50 -I {} sh -c "
       url='$base/{}'
       data=\$(curl -sS --max-time 10 --location -w '%{http_code}|%{size_download}|%{url_effective}' -o /dev/null \"\$url\" 2>/dev/null)
-      echo '{}|\$data'
-    " 2>/dev/null \
-    | while read -l line
-        set count (math $count + 1)
+      echo \"{}|\$data\"
+    " 2>/dev/null > $resfile &
+
+    # Show progress while scanning
+    set done 0
+    while test $done -lt $total
+        set lines (wc -l < $resfile 2>/dev/null)
+        if test -z "$lines"; set lines 0; end
+        printf "\r  [%d/%d] Scanning..." $lines $total >&2
+        sleep 0.1
+        set done $lines
+    end
+    wait
+    echo ""
+
+    # Read and display results
+    set found 0
+    while read -l line
         set parts (string split '|' -- $line)
         set page $parts[1]
         set code $parts[2]
         set size $parts[3]
         set final $parts[4]
 
-        if test -z "$code"
+        if test -z "$code" -o "$code" = "0"
             continue
         end
 
-        # Detect redirect to homepage (false positive)
         set final_path (echo "$final" | sed -E "s#^$base/*##")
         set is_home 0
         if test -z "$final_path" -o "$final_path" = "/"
             set is_home 1
         end
 
-        if test -z "$code"; set code "0"; end
         set label ""
         set color ""
 
@@ -170,15 +182,12 @@ function webscan
                 (set_color brblack)(string trim -- $size)(set_color normal) \
                 (set_color normal)
         end
+    end < $resfile
 
-        printf "\r  [%d/%d] Scanning..." $count $total >&2
-    end
-
-    rm -f $tmp
-    echo ""
+    rm -f $pathfile $resfile
     echo ""
     echo (set_color cyan)"==> Scan complete."(set_color normal)
-    if not set -q found; set found 0; end
+    if test $found -gt 0
         set p; if test $found -ne 1; set p "s"; end
         echo (set_color green)"  Found $found accessible page$p."(set_color normal)
     else
