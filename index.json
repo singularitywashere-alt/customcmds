@@ -1,1 +1,29 @@
-{   "commands": {     "attack": {       "version": "1.4",       "description": "Attacks a HTTP domain, VPN should be used",       "change": "Fixed multi-line formatting (re-import to fix local copy)"     },     "locate-flaw": {       "version": "1.1",       "description": "Locates flaws in a websites, very useful pair with the Attack command",       "change": "Fixed multi-line formatting (re-import to fix local copy)"     },     "hunt": {       "version": "1.1",       "description": "Does locate-flaw and Attack by itself, requires both commands to be installed from our repo",       "change": "Fixed multi-line formatting (re-import to fix local copy)"     },     "uselesscmd": {       "version": "1.0",       "description": "Was made for testing",       "change": "Initial release"     },     "webscan": {       "version": "1.3",       "description": "Scans every single page of a website including hidden ones",       "change": "fixed"     }   } }
+{
+  "commands": {
+    "attack": {
+      "version": "1.4",
+      "description": "Attacks a HTTP domain, VPN should be used",
+      "change": "Fixed multi-line formatting (re-import to fix local copy)"
+    },
+    "locate-flaw": {
+      "version": "1.1",
+      "description": "Locates flaws in a websites, very useful pair with the Attack command",
+      "change": "Fixed multi-line formatting (re-import to fix local copy)"
+    },
+    "hunt": {
+      "version": "1.1",
+      "description": "Does locate-flaw and Attack by itself, requires both commands to be installed from our repo",
+      "change": "Fixed multi-line formatting (re-import to fix local copy)"
+    },
+    "uselesscmd": {
+      "version": "1.0",
+      "description": "Was made for testing",
+      "change": "Initial release"
+    },
+    "webscan": {
+      "version": "1.0",
+      "description": "Scans a target for hidden pages and endpoints",
+      "change": "First release"
+    }
+  }
+}
