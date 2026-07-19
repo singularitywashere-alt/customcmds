@@ -7,12 +7,12 @@ function webscan
         echo ""
         echo "Options:"
         echo "  -w <file>    Custom wordlist (one path per line)"
-        echo "  -l <limit>   Max paths to scan (default: 200)"
+        echo "  -l <limit>   Max paths to scan (default: 500)"
         echo ""
         echo "Examples:"
         echo "  webscan https://example.com"
         echo "  webscan https://example.com -w mypaths.txt"
-        echo "  webscan https://example.com -l 500"
+        echo "  webscan https://example.com -l 1000"
         return
     end
 
@@ -26,7 +26,7 @@ function webscan
         set target "https://$target"
     end
 
-    set limit 200
+    set limit 500
     if set -q _flag_limit
         set limit $_flag_limit
     end
@@ -55,27 +55,67 @@ function webscan
     else
         set paths \
             "" "robots.txt" "sitemap.xml" "sitemap_index.xml" ".htaccess" \
-            "admin" "login" "wp-admin" "administrator" "backend" \
-            "api" "api/v1" "api/v2" "graphql" \
-            ".env" "config" "config.php" "config.json" \
-            "backup" "dump" "sql" "database" \
-            ".git" ".git/config" ".svn" "DS_Store" \
-            "crossdomain.xml" "security.txt" "humans.txt" \
-            "server-status" "server-info" "phpinfo.php" \
-            "test" "dev" "staging" "beta" \
-            "uploads" "images" "assets" "static" \
-            "js" "css" "fonts" \
-            "README.md" "LICENSE" "CHANGELOG" \
-            "package.json" "package-lock.json" \
-            ".well-known/security.txt" ".well-known/" \
-            "index.php" "index.html" "index" \
-            "register" "signup" "signin" "forgot-password" \
-            "search" "query" "ajax" "api/status" \
-            "health" "healthcheck" "status" \
-            "dashboard" "panel" "cpanel" "webmail" \
-            "phpmyadmin" "pma" "mysql" \
-            "xmlrpc.php" "wp-json" "wp-content" \
-            "shell" "cmd" "exec" "console"
+            ".env" ".env.bak" ".env.local" ".env.prod" ".env.dev" \
+            "admin" "admin/" "admin.php" "admin.html" "admin/index.php" \
+            "login" "login.php" "login.html" "signin" "signin.php" \
+            "register" "register.php" "signup" "signup.php" \
+            "forgot-password" "reset-password" "forgot" \
+            "logout" "logout.php" "logout.html" \
+            "wp-admin" "wp-admin/" "wp-login.php" "wp-content" \
+            "wp-content/" "wp-content/uploads" "wp-content/themes" \
+            "wp-content/plugins" "wp-includes" "wp-json" "wp-json/" \
+            "wp-json/wp/v2/users" "xmlrpc.php" "xmlrpc" \
+            "administrator" "administrator/" "admincp" \
+            "backend" "backend/" "api" "api/" "api/v1" "api/v2" "api/v3" \
+            "api/users" "api/login" "api/auth" "api/status" "api/health" \
+            "api/docs" "api/swagger" "api/openapi.json" \
+            "graphql" "graphql/" "graphiql" \
+            "config" "config.php" "config.json" "config.xml" "config.yaml" \
+            "configuration" "settings" "settings.php" \
+            "database" "db" "db/" "sql" "sql/" "mysql" \
+            "backup" "backup/" "backups" "dump" "dumps" \
+            ".git" ".git/" ".git/config" ".git/HEAD" \
+            ".svn" ".svn/" "CVS" "CVS/" \
+            "DS_Store" ".DS_Store" "Thumbs.db" \
+            "crossdomain.xml" "clientaccesspolicy.xml" \
+            "security.txt" ".well-known/security.txt" ".well-known/" \
+            "humans.txt" "README.md" "LICENSE" "CHANGELOG" "CHANGELOG.md" \
+            "package.json" "package-lock.json" "composer.json" \
+            "yarn.lock" "Gemfile" "Gemfile.lock" \
+            "server-status" "server-info" "server-status/" \
+            "phpinfo.php" "info.php" "test.php" \
+            "test" "dev" "staging" "beta" "alpha" "sandbox" \
+            "uploads" "uploads/" "upload" "download" "downloads" \
+            "images" "img" "assets" "assets/" "static" "static/" \
+            "js" "js/" "css" "css/" "fonts" "fonts/" \
+            "index" "index.php" "index.html" "index.htm" \
+            "default" "default.php" "default.html" \
+            "home" "home.php" "home.html" "main" "main.php" \
+            "about" "about.php" "about.html" "contact" "contact.php" \
+            "contact.html" "terms" "privacy" "cookies" \
+            "help" "help.php" "faq" "faq.php" "support" \
+            "search" "search.php" "query" "ajax" "ajax.php" \
+            "health" "healthcheck" "health.php" "status" "status.php" \
+            "dashboard" "dashboard/" "panel" "panel/" "cpanel" \
+            "webmail" "webmail/" "mail" "email" "roundcube" \
+            "phpmyadmin" "phpmyadmin/" "pma" "pma/" "mysql" "mysql/" \
+            "adminer" "adminer.php" "pgmyadmin" \
+            "shell" "shell.php" "cmd" "cmd.php" "exec" "exec.php" \
+            "console" "console/" "terminal" "terminal/" \
+            "ssh" "ssh/" "rdp" "rdp/" "vnc" "vnc/" \
+            "proxy" "proxy/" "proxy.php" "socks" \
+            "README" "CHANGELOG" "CONTRIBUTING" "CONTRIBUTING.md" \
+            "docker" "docker/" "docker-compose.yml" "Dockerfile" \
+            "Makefile" "Makefile.php" "Gruntfile.js" "gulpfile.js" \
+            "webpack.config.js" "webpack" \
+            ".npmrc" ".yarnrc" ".nvmrc" ".node-version" \
+            ".gitignore" ".gitattributes" ".gitmodules" \
+            ".editorconfig" ".eslintrc" ".prettierrc" \
+            "nginx.conf" ".htpasswd" "httpd.conf" \
+            "cgi-bin/" "cgi-bin/php" \
+            "api/v1/users" "api/v1/products" "api/v1/orders" \
+            "api/v2/users" "api/v2/products" \
+            "graphql/console" "graphql/explorer"
     end
 
     echo ""
@@ -94,17 +134,16 @@ function webscan
     echo (set_color brblack)"    Scanning $total paths... "(set_color normal)
     set resfile (mktemp /tmp/webscan_results.XXXXXX)
 
-    # Parallel scan — synchronous, waits for all to finish
+    # Parallel scan — use printf instead of sed to avoid delimiter issues
     cat $pathfile \
-    | xargs -P 100 -I {} sh -c "
-      curl -sS --connect-timeout 5 --max-time 8 \
-        --location -w '%{http_code}|%{size_download}|%{url_effective}' \
+    | xargs -P 100 -I {} sh -c '
+      data=$(curl -sS --connect-timeout 5 --max-time 8 \
+        --location -w "%{http_code}|%{size_download}|%{url_effective}" \
         -o /dev/null \
-        '$base/{}' 2>/dev/null \
-      | sed 's/^/{}|/'
-    " > $resfile
+        '"$base"'/{} 2>/dev/null)
+      printf "%s|%s\n" "{}" "$data"
+    ' > $resfile
 
-    # Read and display results
     set found 0
     while read -l line
         set parts (string split '|' -- $line)
@@ -156,7 +195,7 @@ function webscan
                         set color (set_color yellow)
                     case '*'
                         set label "MISSING"
-                        set color (set_color red)
+                        set color (set_color brblack)
                 end
             case 5
                 set label "ERROR"
@@ -166,14 +205,14 @@ function webscan
                 set color (set_color red)
         end
 
-        if test "$label" != "MISSING" -a "$label" != "HOME"
+        if test "$label" != "MISSING"
             set found (math $found + 1)
-            printf "  %s %-14s %s (%s, %s B)%s\n" \
-                $color $label (set_color normal) \
-                (set_color brblack)"$page"(set_color normal) \
-                (set_color brblack)(string trim -- $size)(set_color normal) \
-                (set_color normal)
         end
+        printf "  %s %-14s %s (%s, %s B)%s\n" \
+            $color $label (set_color normal) \
+            (set_color brblack)"$page"(set_color normal) \
+            (set_color brblack)(string trim -- $size)(set_color normal) \
+            (set_color normal)
     end < $resfile
 
     rm -f $pathfile $resfile
@@ -181,8 +220,8 @@ function webscan
     echo (set_color cyan)"==> Scan complete."(set_color normal)
     if test $found -gt 0
         set p; if test $found -ne 1; set p "s"; end
-        echo (set_color green)"  Found $found accessible page$p."(set_color normal)
+        echo (set_color green)"  Found $found page$p."(set_color normal)
     else
-        echo (set_color yellow)"  No accessible pages found."(set_color normal)
+        echo (set_color yellow)"  No pages found."(set_color normal)
     end
 end
