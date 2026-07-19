@@ -24,6 +24,16 @@
       "version": "1.5",
       "description": "Scans a target for hidden pages and endpoints",
       "change": "Fix stray double quote breaking shell quoting, show all results including 404s, bigger wordlist"
+    },
+    "whois": {
+      "version": "1.0",
+      "description": "Domain WHOIS lookup with availability, expiry, registrar",
+      "change": "Initial release"
+    },
+    "webrtcip": {
+      "version": "1.0",
+      "description": "WebRTC-based IP capture server \u2014 logs visitor IPs via browser",
+      "change": "Initial release"
     }
   }
 }
