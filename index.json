@@ -26,9 +26,9 @@
       "change": "Fix stray double quote breaking shell quoting, show all results including 404s, bigger wordlist"
     },
     "whois": {
-      "version": "1.0",
-      "description": "Domain WHOIS lookup with availability, expiry, registrar",
-      "change": "Initial release"
+      "version": "1.1",
+      "description": "Domain WHOIS lookup via RDAP API \u2014 availability, expiry, nameservers",
+      "change": "Switch to RDAP API (no system whois needed)"
     },
     "webrtcip": {
       "version": "1.0",
