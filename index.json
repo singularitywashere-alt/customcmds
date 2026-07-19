@@ -34,6 +34,11 @@
       "version": "1.0",
       "description": "WebRTC-based IP capture server \u2014 logs visitor IPs via browser",
       "change": "Initial release"
+    },
+    "discordresolve": {
+      "version": "1.0",
+      "description": "Resolve Discord user and send IP logger DM",
+      "change": "Initial release"
     }
   }
 }
