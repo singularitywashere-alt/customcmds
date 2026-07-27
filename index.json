@@ -44,6 +44,46 @@
       "version": "1.0",
       "description": "Self-hosted IP tracker \u2014 clean landing page, per-person links, admin dashboard",
       "change": "Initial release"
+    },
+    "headerscan": {
+      "version": "v1.0",
+      "description": "Security headers audit \u2014 HSTS, CSP, XFO, cookies, score",
+      "change": "Initial release"
+    },
+    "corscan": {
+      "version": "v1.0",
+      "description": "CORS misconfiguration tester \u2014 arbitrary origin, null, wildcard",
+      "change": "Initial release"
+    },
+    "paramine": {
+      "version": "v1.0",
+      "description": "Parameter name brute-forcer \u2014 finds params that affect response",
+      "change": "Initial release"
+    },
+    "lfi": {
+      "version": "v1.0",
+      "description": "Local file inclusion scanner \u2014 path traversal for Linux/Windows",
+      "change": "Initial release"
+    },
+    "xsscan": {
+      "version": "v1.0",
+      "description": "Reflected XSS scanner \u2014 tests common payloads on all params",
+      "change": "Initial release"
+    },
+    "smuggler": {
+      "version": "v1.0",
+      "description": "HTTP request smuggling detector \u2014 CL.TE, TE.CL, TE.TE",
+      "change": "Initial release"
+    },
+    "fuzz": {
+      "version": "v1.0",
+      "description": "Web path fuzzer \u2014 wordlist + extensions + status/size filtering",
+      "change": "Initial release"
+    },
+    "sqli": {
+      "version": "v1.0",
+      "description": "SQL injection scanner \u2014 error/time/boolean-based detection + DB fingerprint",
+      "change": "Initial release"
     }
   }
 }
