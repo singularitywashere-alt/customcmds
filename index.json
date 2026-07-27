@@ -84,6 +84,11 @@
       "version": "v1.0",
       "description": "SQL injection scanner \u2014 error/time/boolean-based detection + DB fingerprint",
       "change": "Initial release"
+    },
+    "pinstall": {
+      "version": "1.0",
+      "description": "Download and install pentesting tools (ffuf, gobuster, httpx, nuclei, subfinder, naabu, amass, sqlmap)",
+      "change": "Initial release"
     }
   }
 }
