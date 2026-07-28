@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """chatctl — Anti chat control encryption tool (cross-platform Python)"""
-import sys, os, json, base64, hashlib, secrets, subprocess, time, re, struct, signal, shlex
+import sys, os, json, base64, hashlib, secrets, subprocess, time, re, struct, signal, shlex, atexit
 
 CONFIG_DIR = os.path.expanduser("~/.chatctl")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 STATE_FILE = os.path.join(CONFIG_DIR, "state.json")
+PID_FILE = os.path.join(CONFIG_DIR, "daemon.pid")
+LOG_FILE = os.path.join(CONFIG_DIR, "daemon.log")
 
 def ensure_dir():
     os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -33,7 +35,17 @@ def save_state(st):
     with open(STATE_FILE, 'w') as f:
         json.dump(st, f)
 
-# ─── CRYPTO (stdlib only: PBKDF2 + HMAC-SHA256 stream cipher) ───
+def log(msg):
+    with open(LOG_FILE, 'a') as f:
+        f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+
+def notify(title, text):
+    try:
+        subprocess.run(['notify-send', title, text[:200]], check=False,
+                       timeout=2)
+    except: pass
+
+# ─── CRYPTO ───
 def derive_key(password: str, salt: bytes) -> bytes:
     return hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 200000, 32)
 
@@ -69,7 +81,6 @@ def decrypt(encoded: str, password: str) -> str:
 def random_prefix(length=10):
     return secrets.token_hex(length // 2 + 1)[:length]
 
-# ─── MESSAGE FORMAT ───
 ENC_PATTERN = re.compile(r'^([a-zA-Z0-9]{6,16})///')
 
 def format_encrypted(plaintext: str, password: str) -> str:
@@ -81,13 +92,11 @@ def try_decrypt(text: str, password: str):
     m = ENC_PATTERN.match(text)
     if not m:
         return None
-    prefix = m.group(1)
     payload = text[m.end():]
     if not payload:
         return None
     try:
-        pt = decrypt(payload, password)
-        return pt
+        return decrypt(payload, password)
     except:
         return None
 
@@ -122,27 +131,125 @@ def clip_paste():
     except: pass
     return ""
 
+# ─── DAEMON ───
+def daemon_loop(pw):
+    last_raw = ""
+    oneshot = {}
+
+    log("Daemon started")
+    notify("ChatCtl", "Daemon running — auto-encrypt/decrypt active")
+
+    while True:
+        try:
+            text = clip_paste()
+            if text and text != last_raw:
+                last_raw = text
+                st = load_state()
+
+                # Case 1: Text is encrypted → decrypt (always, regardless of state)
+                pt = try_decrypt(text, pw)
+                if pt is not None:
+                    clip_copy(pt)
+                    log(f"Decrypted ({len(text)}b -> {len(pt)}b)")
+                    notify("ChatCtl", f"Decrypted: {pt[:100]}")
+                    last_raw = pt
+                    continue
+
+                # Case 2: Encryption ON and text NOT encrypted → encrypt for sending
+                if st.get('encryption'):
+                    # Don't re-encrypt if the clipboard was just set by us
+                    # (prevent loop: we encrypt, clipboard changes, we see encrypted text, we decrypt...)
+                    # Actually the decrypt case above handles that first
+                    enc = format_encrypted(text, pw)
+                    clip_copy(enc)
+                    log(f"Encrypted ({len(text)}b -> {len(enc)}b)")
+                    notify("ChatCtl", f"Encrypted ({len(text)} chars)")
+                    last_raw = enc
+
+            time.sleep(0.3)
+        except KeyboardInterrupt:
+            log("Daemon stopped")
+            break
+        except:
+            time.sleep(1)
+
+def cmd_daemon(args):
+    pw = load_config().get('password', '')
+    if not pw:
+        print("  \033[31mNo key set. Run: chatctl key <passphrase>\033[0m")
+        return
+
+    # Check if already running
+    if os.path.exists(PID_FILE):
+        with open(PID_FILE) as f:
+            old_pid = f.read().strip()
+        try:
+            os.kill(int(old_pid), 0)
+            print(f"  \033[33mDaemon already running (PID {old_pid})\033[0m")
+            print("  Run 'chatctl stop' to stop it")
+            return
+        except:
+            os.remove(PID_FILE)
+
+    pid = os.fork()
+    if pid > 0:
+        with open(PID_FILE, 'w') as f:
+            f.write(str(pid))
+        print(f"  \033[32mDaemon started (PID {pid})\033[0m")
+        print("  Clipboard auto-processing active.")
+        print("  Encryption ON  -> copy text = auto-encrypted in clipboard")
+        print("  Encryption OFF -> only decrypts detected encrypted messages")
+        print("  Run 'chatctl stop' to stop")
+        return
+
+    # Child: daemonize
+    os.setsid()
+    sys.stdin = open(os.devnull)
+    sys.stdout = open(os.devnull, 'w')
+    sys.stderr = open(os.devnull, 'w')
+    daemon_loop(pw)
+
+def cmd_stop(args):
+    if not os.path.exists(PID_FILE):
+        print("  \033[33mDaemon not running\033[0m")
+        return
+    with open(PID_FILE) as f:
+        pid = f.read().strip()
+    try:
+        os.kill(int(pid), signal.SIGTERM)
+        os.remove(PID_FILE)
+        print(f"  \033[32mDaemon stopped (PID {pid})\033[0m")
+    except:
+        os.remove(PID_FILE)
+        print("  \033[33mDaemon was not running (stale PID removed)\033[0m")
+
 # ─── COMMANDS ───
 def cmd_status():
     cfg = load_config()
     st = load_state()
     pw = cfg.get('password', '')
     c = "\033[32mON\033[0m" if st.get('encryption') else "\033[31mOFF\033[0m"
+    running = False
+    if os.path.exists(PID_FILE):
+        with open(PID_FILE) as f:
+            try: os.kill(int(f.read().strip()), 0); running = True
+            except: pass
+    d = "\033[32mrunning\033[0m" if running else "\033[31mstopped\033[0m"
     print(f"  Encryption: {c}")
+    print(f"  Daemon:     {d}")
     print(f"  Key set:    {'\033[32mYes\033[0m' if pw else '\033[33mNo\033[0m'}")
-    print(f"  Config:     {CONFIG_FILE}")
 
 def cmd_on():
     st = load_state()
     st['encryption'] = True
     save_state(st)
-    print("  \033[32mEncryption enabled\033[0m")
+    print("  \033[32mEncryption ON\033[0m  — copy any text to auto-encrypt it")
 
 def cmd_off():
     st = load_state()
     st['encryption'] = False
     save_state(st)
-    print("  \033[31mEncryption disabled\033[0m")
+    print("  \033[31mEncryption OFF\033[0m — copy encrypted text to auto-decrypt only")
 
 def cmd_key(args):
     if not args:
@@ -156,17 +263,13 @@ def cmd_key(args):
 
 def cmd_encrypt(args):
     pw = load_config().get('password', '')
-    if not pw:
-        print("  \033[31mNo key set. Run: chatctl key <passphrase>\033[0m")
-        return
-    msg = ' '.join(args) if args else sys.stdin.read().strip()
-    if not msg:
+    if not pw or not args:
         print("  Usage: chatctl encrypt <message>")
         return
+    msg = ' '.join(args)
     result = format_encrypted(msg, pw)
-    prefix = "\033[32m[ENCRYPTED]\033[0m"
-    print(f"  {prefix} {result}")
     clip_copy(result)
+    print(f"  \033[32m[ENCRYPTED]\033[0m {result}")
     print("  \033[90m(copied to clipboard)\033[0m")
 
 def cmd_decrypt(args):
@@ -174,109 +277,81 @@ def cmd_decrypt(args):
     if not pw:
         print("  \033[31mNo key set. Run: chatctl key <passphrase>\033[0m")
         return
-    msg = ' '.join(args) if args else sys.stdin.read().strip()
+    msg = ' '.join(args) if args else clip_paste()
     if not msg:
-        msg = clip_paste()
-    if not msg:
-        print("  Usage: chatctl decrypt <message> (or pipe it)")
+        print("  Usage: chatctl decrypt <message>")
         return
     pt = try_decrypt(msg, pw)
     if pt is not None:
-        # Extract original message (strip random_prefix///)
         print(f"  \033[32m[ENCRYPTED]\033[0m {pt}")
         clip_copy(pt)
-        print("  \033[90m(decrypted text copied to clipboard)\033[0m")
     else:
         print(f"  \033[33m[UNENCRYPTED]\033[0m {msg}")
 
-def cmd_send(args):
+def cmd_watch(args):
+    """Foreground watch mode (for debugging)"""
     pw = load_config().get('password', '')
     if not pw:
         print("  \033[31mNo key set. Run: chatctl key <passphrase>\033[0m")
         return
-    msg = ' '.join(args) if args else ''
-    if not msg:
-        print("  Enter message (Ctrl+D to send):")
-        msg = sys.stdin.read().strip()
-    st = load_state()
-    if st.get('encryption') and msg:
-        result = format_encrypted(msg, pw)
-        prefix = "\033[32m[ENCRYPTED]\033[0m"
-        print(f"\n  {prefix} {result}")
-        clip_copy(result)
-        print("  \033[90m(copied — paste into Discord)\033[0m")
-    else:
-        print(f"  \033[33m[UNENCRYPTED]\033[0m {msg}")
-        clip_copy(msg)
-
-def cmd_watch():
-    pw = load_config().get('password', '')
-    if not pw:
-        print("  \033[31mNo key set. Run: chatctl key <passphrase>\033[0m")
-        return
-    print("  \033[90mWatching clipboard for encrypted messages... (Ctrl+C to stop)\033[0m")
+    print("  \033[90mClipboard watcher (Ctrl+C to stop)\033[0m")
+    print("  \033[90mEncryption ON  -> copy = auto-encrypt | OFF -> decrypt only\033[0m")
     last = ""
     while True:
         try:
             text = clip_paste()
             if text and text != last:
                 last = text
+                st = load_state()
                 pt = try_decrypt(text, pw)
                 if pt is not None:
                     print(f"  \033[32m[ENCRYPTED]\033[0m {pt}")
                     clip_copy(pt)
-            time.sleep(1)
+                elif st.get('encryption'):
+                    enc = format_encrypted(text, pw)
+                    print(f"  \033[32m[ENCRYPTED]\033[0m {enc}")
+                    clip_copy(enc)
+            time.sleep(0.3)
         except KeyboardInterrupt:
-            print("\n  \033[90mStopped\033[0m")
             break
         except: pass
-
-def cmd_process(args):
-    """Process clipboard text for decryption (for pipe/automation)"""
-    pw = load_config().get('password', '')
-    if not pw:
-        return
-    text = clip_paste()
-    if not text:
-        text = sys.stdin.read().strip()
-    if text:
-        pt = try_decrypt(text, pw)
-        if pt is not None:
-            print(f"[ENCRYPTED] {pt}")
-        else:
-            print(f"[UNENCRYPTED] {text}")
 
 # ─── MAIN ───
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print("Usage: chatctl <command> [args]")
-        print("")
+        print()
         print("  on           Enable encryption")
         print("  off          Disable encryption")
-        print("  status       Show encryption status")
+        print("  status       Show status (encryption + daemon)")
         print("  key <pw>     Set shared passphrase")
+        print("  daemon       Start background daemon (auto-clipboard)")
+        print("  stop         Stop the daemon")
         print("  encrypt <m>  Encrypt a message")
         print("  decrypt <m>  Decrypt a message")
-        print("  send <m>     Send (encrypt if ON, plain if OFF)")
-        print("  watch        Watch clipboard for encrypted messages")
-        print("  process      Decrypt clipboard or stdin (for piping)")
+        print("  watch        Foreground clipboard watcher (debug)")
+        print()
+        print("Quick start:")
+        print("  chatctl key \"mysecret\"           # set key (same for friend)")
+        print("  chatctl on                       # enable encryption")
+        print("  chatctl daemon                   # start background daemon")
+        print("  # Now: copy text -> auto-encrypted in clipboard")
+        print("  #       copy encrypted text -> auto-decrypted")
         return
 
     cmd = sys.argv[1]
     args = sys.argv[2:]
 
-    # Some commands ignore args
-    def noop(args): pass
     cmds = {
-        'status': lambda a: cmd_status(),
         'on': lambda a: cmd_on(),
         'off': lambda a: cmd_off(),
+        'status': lambda a: cmd_status(),
         'key': cmd_key,
         'encrypt': cmd_encrypt,
         'decrypt': cmd_decrypt,
-        'send': cmd_send,
-        'watch': cmd_watch,
-        'process': cmd_process,
+        'watch': lambda a: cmd_watch(a),
+        'daemon': lambda a: cmd_daemon(a),
+        'stop': lambda a: cmd_stop(a),
     }
 
     if cmd in cmds:
