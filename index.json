@@ -89,6 +89,11 @@
       "version": "1.0",
       "description": "Download and install pentesting tools (ffuf, gobuster, httpx, nuclei, subfinder, naabu, amass, sqlmap)",
       "change": "Initial release"
+    },
+    "chatctl": {
+      "version": "1.0",
+      "description": "Anti chat control \u2014 encrypted messaging via any platform (Discord, Telegram, etc.)",
+      "change": "Initial release"
     }
   }
 }
