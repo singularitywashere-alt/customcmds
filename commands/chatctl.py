@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """chatctl — Anti chat control encryption tool (cross-platform Python)"""
-import sys, os, json, base64, hashlib, secrets, subprocess, time, re, struct, signal, shlex, atexit
+import sys, os, json, base64, hashlib, secrets, subprocess, time, re, struct, signal, shlex, atexit, shutil
 
 CONFIG_DIR = os.path.expanduser("~/.chatctl")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
@@ -316,27 +316,84 @@ def cmd_watch(args):
             break
         except: pass
 
+PLUGIN_SRC = os.path.join(CONFIG_DIR, "ChatCtl.plugin.js")
+
+BD_DIRS = [
+    os.path.expanduser("~/.config/BetterDiscord/plugins"),
+    os.path.expanduser("~/.config/Vencord/plugins"),
+    os.path.expanduser("~/.config/vencord/plugins"),
+    os.path.expanduser("~/.config/Vencord/userplugins"),
+    os.path.expanduser("~/.config/BetterDiscord/userplugins"),
+]
+
+def cmd_plugin(args):
+    if not args or args[0] in ('-h', '--help'):
+        print("Usage: chatctl plugin <install|uninstall>")
+        return
+    sub = args[0]
+
+    if sub == 'install':
+        if not os.path.exists(PLUGIN_SRC):
+            # Try to find the plugin near the script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            alt = os.path.join(script_dir, "ChatCtl.plugin.js")
+            if os.path.exists(alt):
+                shutil.copy2(alt, PLUGIN_SRC)
+            else:
+                print("  \033[31mPlugin file not found. Run --full-install or check ~/.chatctl/\033[0m")
+                return
+
+        installed = False
+        for d in BD_DIRS:
+            os.makedirs(d, exist_ok=True)
+            dst = os.path.join(d, "ChatCtl.plugin.js")
+            shutil.copy2(PLUGIN_SRC, dst)
+            print(f"  \033[32mInstalled to:\033[0m {dst}")
+            installed = True
+
+        if not installed:
+            print("  \033[33mNo BetterDiscord/Vencord plugin directory found.\033[0m")
+            print("  \033[33mCreate one manually or copy the file:\033[0m")
+            print(f"  \033[90m  cp {PLUGIN_SRC} <plugin-dir>/ChatCtl.plugin.js\033[0m")
+        else:
+            print("  \033[32mPlugin installed! Restart Discord (Ctrl+R) or enable in BD settings.\033[0m")
+
+    elif sub == 'uninstall':
+        removed = False
+        for d in BD_DIRS:
+            dst = os.path.join(d, "ChatCtl.plugin.js")
+            if os.path.exists(dst):
+                os.remove(dst)
+                print(f"  \033[31mRemoved:\033[0m {dst}")
+                removed = True
+        if not removed:
+            print("  \033[33mPlugin not found in any plugin directory\033[0m")
+    else:
+        print(f"  \033[31mUnknown subcommand: {sub}\033[0m")
+
 # ─── MAIN ───
 def main():
     if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print("Usage: chatctl <command> [args]")
         print()
-        print("  on           Enable encryption")
-        print("  off          Disable encryption")
-        print("  status       Show status (encryption + daemon)")
-        print("  key <pw>     Set shared passphrase")
-        print("  daemon       Start background daemon (auto-clipboard)")
-        print("  stop         Stop the daemon")
-        print("  encrypt <m>  Encrypt a message")
-        print("  decrypt <m>  Decrypt a message")
-        print("  watch        Foreground clipboard watcher (debug)")
+        print("  on              Enable encryption")
+        print("  off             Disable encryption")
+        print("  status          Show status (encryption + daemon)")
+        print("  key <pw>        Set shared passphrase")
+        print("  daemon          Start background daemon (auto-clipboard)")
+        print("  stop            Stop the daemon")
+        print("  encrypt <m>     Encrypt a message")
+        print("  decrypt <m>     Decrypt a message")
+        print("  watch           Foreground clipboard watcher (debug)")
+        print("  plugin install  Install BetterDiscord plugin")
+        print("  plugin uninstall  Remove BetterDiscord plugin")
         print()
         print("Quick start:")
         print("  chatctl key \"mysecret\"           # set key (same for friend)")
-        print("  chatctl on                       # enable encryption")
-        print("  chatctl daemon                   # start background daemon")
-        print("  # Now: copy text -> auto-encrypted in clipboard")
-        print("  #       copy encrypted text -> auto-decrypted")
+        print("  chatctl plugin install            # install BetterDiscord plugin")
+        print("  # Now Discord auto-encrypts/decrypts messages!")
+        print("  # [ENCRYPTED] labels on encrypted messages")
+        print("  # [UNENCRYPTED] labels on plaintext messages")
         return
 
     cmd = sys.argv[1]
@@ -352,6 +409,7 @@ def main():
         'watch': lambda a: cmd_watch(a),
         'daemon': lambda a: cmd_daemon(a),
         'stop': lambda a: cmd_stop(a),
+        'plugin': cmd_plugin,
     }
 
     if cmd in cmds:
