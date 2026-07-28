@@ -91,9 +91,9 @@
       "change": "Initial release"
     },
     "chatctl": {
-      "version": "1.0",
-      "description": "Anti chat control \u2014 encrypted messaging via any platform (Discord, Telegram, etc.)",
-      "change": "Initial release"
+      "version": "2.0",
+      "description": "Anti chat control \u2014 auto-encrypt/decrypt via clipboard daemon",
+      "change": "Background daemon, auto-clipboard processing, desktop notifications"
     }
   }
 }
