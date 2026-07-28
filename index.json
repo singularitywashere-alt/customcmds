@@ -91,9 +91,9 @@
       "change": "Initial release"
     },
     "chatctl": {
-      "version": "2.0",
-      "description": "Anti chat control \u2014 auto-encrypt/decrypt via clipboard daemon",
-      "change": "Background daemon, auto-clipboard processing, desktop notifications"
+      "version": "3.0",
+      "description": "Anti chat control \u2014 BetterDiscord plugin + auto-encrypt/decrypt",
+      "change": "BetterDiscord plugin for in-chat auto-encrypt/decrypt with [ENCRYPTED]/[UNENCRYPTED] labels"
     }
   }
 }
